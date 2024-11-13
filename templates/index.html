@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Data</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  <!-- Library untuk grafik -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            margin-bottom: 30px;
+        }
+        #data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #data-table th, #data-table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        #data-table th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Real-time Sensor Data</h1>
+
+    <!-- Table for displaying data -->
+    <div class="container">
+        <table id="data-table">
+            <thead>
+                <tr>
+                    <th>Temperature (°C)</th>
+                    <th>Humidity (%)</th>
+                    <th>Brightness</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                <!-- Data rows will be inserted here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Graph for visualizing temperature over time -->
+    <div class="container">
+        <canvas id="temperatureChart" width="400" height="200"></canvas>
+    </div>
+
+    <script>
+        // Connect to the Socket.IO server
+        const socket = io.connect('http://localhost:43222');  // Adjust the URL if needed
+
+        // To store the data for chart
+        let temperatureData = [];
+        let timeData = [];
+
+        // Get data from the server
+        fetch('/json')
+            .then(response => response.json())
+            .then(data => {
+                // Populate table and chart with the current data
+                updateTable(data.nilai_suhu_max_humid_max);
+                updateChart(data.nilai_suhu_max_humid_max);
+            });
+
+        // Handle real-time data updates from Socket.IO
+        socket.on('data_update', function(data) {
+            const newData = {
+                suhu: data.suhu,
+                kelembapan: data.kelembapan,
+                kecerahan: data.kecerahan,
+                timestamp: new Date().toLocaleString()  // Current timestamp
+            };
+            // Update table and chart with new data
+            updateTable([newData]);
+            updateChart([newData]);
+        });
+
+        // Function to update the table with new data
+        function updateTable(newData) {
+            const tableBody = document.getElementById('table-body');
+            newData.forEach(data => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${data.suhu || 'N/A'}</td>
+                    <td>${data.kelembapan || 'N/A'}</td>
+                    <td>${data.kecerahan || 'N/A'}</td>
+                    <td>${data.timestamp}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Function to update the chart with new data
+        function updateChart(newData) {
+            newData.forEach(data => {
+                // Add new temperature and timestamp to the arrays
+                temperatureData.push(data.suhu);
+                timeData.push(data.timestamp);
+
+                // Keep chart data within a limit (e.g., last 10 data points)
+                if (temperatureData.length > 10) {
+                    temperatureData.shift();
+                    timeData.shift();
+                }
+            });
+
+            // Update the chart
+            temperatureChart.update();
+        }
+
+        // Initialize the chart
+        const ctx = document.getElementById('temperatureChart').getContext('2d');
+        const temperatureChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeData,
+                datasets: [{
+                    label: 'Temperature (°C)',
+                    data: temperatureData,
+                    borderColor: 'rgb(75, 192, 192)',
+                    borderWidth: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: 'category',
+                        labels: timeData,
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    },
+                    y: {
+                        beginAtZero: false
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    </script>
+</body>
+</html>
